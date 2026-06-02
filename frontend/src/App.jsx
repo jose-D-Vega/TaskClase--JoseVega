@@ -2,9 +2,12 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import AdminDashboard from './pages/AdminDashboard';
+import ProfilePage from './pages/ProfilePage';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import RoleGuard from './components/auth/RoleGuard';
 import PublicRoute from './components/auth/PublicRoute';
 import Header from './components/layout/Header';
 
@@ -20,10 +23,15 @@ function AppContent() {
             <Route path="/register" element={<RegisterPage />} />
           </Route>
 
-          {/* Rutas Protegidas */}
+          {/* Rutas Protegidas (Cualquier usuario logueado) */}
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<HomePage />} />
-            {/* Agrega más rutas protegidas aquí */}
+            <Route path="/profile" element={<ProfilePage />} />
+          </Route>
+
+          {/* Rutas de Administrador */}
+          <Route element={<RoleGuard allowedRoles={['admin']} />}>
+            <Route path="/admin" element={<AdminDashboard />} />
           </Route>
 
           {/* Redirección por defecto */}

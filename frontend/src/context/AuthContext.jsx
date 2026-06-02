@@ -1,11 +1,30 @@
-import { createContext, useState, useContext, useEffect } from 'react';
-import axiosClient from '../api/axiosClient';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import axiosClient, { setLogoutCallback } from '../api/axiosClient';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Definimos logout con useCallback para que no cambie en cada render
+  const logout = useCallback(async () => {
+    try {
+      await axiosClient.post('/auth/logout');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    } finally {
+      sessionStorage.removeItem('accessToken');
+      setUser(null);
+    }
+  }, []);
+
+  // Registramos el callback de logout en el cliente axios
+  // Esto es fundamental para que el interceptor de Axios pueda cerrar la sesión
+  // globalmente si el refresh token también expira, sin necesidad de recargar la página.
+  useEffect(() => {
+    setLogoutCallback(logout);
+  }, [logout]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -52,17 +71,6 @@ export const AuthProvider = ({ children }) => {
         success: false, 
         message: error.message || 'Error al registrarse' 
       };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await axiosClient.post('/auth/logout');
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error);
-    } finally {
-      sessionStorage.removeItem('accessToken');
-      setUser(null);
     }
   };
 

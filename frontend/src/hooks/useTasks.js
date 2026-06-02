@@ -60,7 +60,7 @@ export const useTasks = () => {
   /**
    * Busca una tarea por ID.
    */
-  const findTaskById = async (id) => {
+  const findTaskById = useCallback(async (id) => {
     setLoading(true);
     setError(null);
     try {
@@ -72,12 +72,12 @@ export const useTasks = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   /**
    * Crea una nueva tarea y recarga la lista.
    */
-  const createTask = async (taskData) => {
+  const createTask = useCallback(async (taskData) => {
     setLoading(true);
     try {
       await taskService.createTask(taskData);
@@ -90,12 +90,12 @@ export const useTasks = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchTasks, fetchStats]);
 
   /**
    * Actualiza una tarea y recarga la lista.
    */
-  const updateTask = async (id, taskData) => {
+  const updateTask = useCallback(async (id, taskData) => {
     setLoading(true);
     try {
       await taskService.updateTask(id, taskData);
@@ -108,12 +108,12 @@ export const useTasks = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchTasks, fetchStats]);
 
   /**
    * Elimina una tarea y recarga la lista.
    */
-  const deleteTask = async (id) => {
+  const deleteTask = useCallback(async (id) => {
     setLoading(true);
     try {
       await taskService.deleteTask(id);
@@ -126,7 +126,7 @@ export const useTasks = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchTasks, fetchStats]);
 
   /**
    * Actualiza el estado de los filtros.

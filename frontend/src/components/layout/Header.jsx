@@ -20,6 +20,21 @@ const Header = () => {
         </Link>
 
         <nav className="flex items-center gap-6">
+          {user && (
+            <div className="hidden md:flex items-center gap-4 mr-4 border-r border-[var(--border-color)] pr-6">
+              <Link to="/" className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)] hover:text-cyber-cyan transition-colors">
+                Tareas
+              </Link>
+              {user.role === 'admin' && (
+                <Link to="/admin" className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)] hover:text-cyber-cyan transition-colors">
+                  Admin
+                </Link>
+              )}
+              <Link to="/profile" className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)] hover:text-cyber-cyan transition-colors">
+                Perfil
+              </Link>
+            </div>
+          )}
           <button 
             onClick={toggleTheme}
             className="p-2 rounded-full hover:bg-[var(--bg-secondary)] transition-colors text-[var(--accent-primary)]"
@@ -38,7 +53,7 @@ const Header = () => {
 
           {user ? (
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3 border-l border-[var(--border-color)] pl-4">
+              <Link to="/profile" className="flex items-center gap-3 border-l border-[var(--border-color)] pl-4 hover:opacity-80 transition-opacity">
                 <div className="text-right hidden sm:block">
                   <p className="text-xs font-bold text-[var(--text-primary)]">{user.name}</p>
                   <p className="text-[10px] text-[var(--text-muted)] font-mono">{user.email}</p>
@@ -50,7 +65,7 @@ const Header = () => {
                     {user.name.charAt(0).toUpperCase()}
                   </div>
                 )}
-              </div>
+              </Link>
               <Button 
                 variant="ghost" 
                 className="text-[10px] !py-1 !px-2 text-cyber-fuchsia hover:bg-cyber-fuchsia/10 border-cyber-fuchsia/20"

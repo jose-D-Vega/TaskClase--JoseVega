@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import SectionCard from '../components/layout/SectionCard';
 import ApiStatus from '../components/status/ApiStatus';
 import TaskStats from '../components/tasks/TaskStats';
@@ -29,38 +29,38 @@ const HomePage = () => {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [lastSearchedId, setLastSearchedId] = useState(null);
 
-  const handleEditClick = (task) => {
+  const handleEditClick = useCallback((task) => {
     setEditingTask(task);
-  };
+  }, []);
 
-  const handleUpdate = async (id, data) => {
+  const handleUpdate = useCallback(async (id, data) => {
     const success = await updateTask(id, data);
     if (success) {
       setEditingTask(null);
       // Si la tarea editada es la que se buscó por ID, activamos una recarga
       // para que TaskSearchById sepa que debe volver a buscarla
-      if (lastSearchedId === id) {
+      if (lastSearchedId && lastSearchedId.toString().split('_')[0] === id.toString()) {
         setLastSearchedId(id + '_' + Date.now()); 
       }
     }
-  };
+  }, [updateTask, lastSearchedId]);
 
-  const handleDeleteClick = (id) => {
+  const handleDeleteClick = useCallback((id) => {
     setTaskToDelete(id);
-  };
+  }, []);
 
-  const confirmDelete = async () => {
+  const confirmDelete = useCallback(async () => {
     if (taskToDelete) {
       const success = await deleteTask(taskToDelete);
       if (success) {
         setTaskToDelete(null);
       }
     }
-  };
+  }, [deleteTask, taskToDelete]);
 
-  const cancelDelete = () => {
+  const cancelDelete = useCallback(() => {
     setTaskToDelete(null);
-  };
+  }, []);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">

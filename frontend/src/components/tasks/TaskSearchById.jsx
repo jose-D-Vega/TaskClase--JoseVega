@@ -43,11 +43,11 @@ const TaskSearchById = ({ onSearch, onEdit, onDelete, refreshTrigger, onSearched
    * que requieren refrescar la tarea buscada actualmente.
    */
   useEffect(() => {
-    if (refreshTrigger && foundTask) {
-      // Extraemos el ID numérico del trigger (que viene como ID_timestamp)
+    // Solo disparamos el refresco si el trigger contiene el separador '_'
+    // lo cual indica que es una acción de refresco explícita desde el padre.
+    if (refreshTrigger && refreshTrigger.toString().includes('_') && foundTask) {
       const idToRefresh = refreshTrigger.toString().split('_')[0];
       if (idToRefresh === foundTask.id.toString()) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         executeSearch(idToRefresh);
       }
     }
