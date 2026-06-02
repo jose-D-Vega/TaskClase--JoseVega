@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const { pool } = require('../config/db');
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
     // Obtener el token del header Authorization: Bearer <token>
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1];
@@ -15,6 +16,23 @@ const authMiddleware = (req, res, next) => {
     try {
         // Verificar el token
         const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+        
+        // VALIDACIÓN DE SESIÓN REMOTA
+        // Verificamos si la sesión (sid) sigue existiendo en la base de datos
+        if (decoded.sid) {
+            const sessionCheck = await pool.query(
+                'SELECT id FROM refresh_tokens WHERE id = $1',
+                [decoded.sid]
+            );
+
+            if (sessionCheck.rows.length === 0) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Sesión revocada o cerrada remotamente.',
+                    revoked: true
+                });
+            }
+        }
         
         // Agregar los datos del usuario decodificados al objeto req
         req.user = decoded;

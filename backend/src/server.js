@@ -1,13 +1,14 @@
 const app = require('./app');
 const { connectDB } = require('./config/db');
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 const startServer = async () => {
   try {
     await connectDB();
-    app.listen(PORT, () => {
-      console.log(`Servidor corriendo en el puerto ${PORT}`);
+    app.listen(PORT, HOST, () => {
+      console.log(`Servidor corriendo en http://${HOST}:${PORT}`);
     });
   } catch (error) {
     console.error('Error al iniciar el servidor:', error);

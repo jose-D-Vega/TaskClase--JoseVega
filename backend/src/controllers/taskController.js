@@ -159,13 +159,21 @@ const updateTask = async (req, res) => {
       `UPDATE tasks SET
         title       = COALESCE($1, title),
         description = COALESCE($2, description),
-        status      = COALESCE($3, status),
-        priority    = COALESCE($4, priority),
+        status      = COALESCE($3::task_status, status),
+        priority    = COALESCE($4::task_priority, priority),
         due_date    = COALESCE($5, due_date),
         updated_at  = CURRENT_TIMESTAMP
        WHERE id = $6 AND user_id = $7
        RETURNING *`,
-      [title, description, status, priority, due_date, id, user_id]
+      [
+        title !== undefined ? title : null,
+        description !== undefined ? description : null,
+        (status && status.trim() !== '') ? status : null,
+        (priority && priority.trim() !== '') ? priority : null,
+        (due_date && due_date.trim() !== '') ? due_date : null,
+        id,
+        user_id
+      ]
     );
     
     res.json({

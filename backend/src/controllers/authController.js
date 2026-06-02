@@ -3,9 +3,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 // Generar Access Token (vida configurable, default: 5 min)
-const generateAccessToken = (user) => {
+// Incluimos el rol en el payload del JWT para validaciones rápidas en el cliente y middleware
+const generateAccessToken = (user, sessionId) => {
     return jwt.sign(
-        { id: user.id, email: user.email },
+        { id: user.id, email: user.email, role: user.role, sid: sessionId },
         process.env.JWT_ACCESS_SECRET,
         { expiresIn: process.env.JWT_ACCESS_EXPIRES || '5m' }
     );
@@ -41,7 +42,7 @@ const register = async (req, res) => {
 
         // Crear usuario
         const result = await pool.query(
-            'INSERT INTO users (name, email, password, avatar) VALUES ($1, $2, $3, $4) RETURNING id, name, email, avatar, created_at',
+            'INSERT INTO users (name, email, password, avatar) VALUES ($1, $2, $3, $4) RETURNING id, name, email, avatar, role, created_at',
             [name, email, hashedPassword, avatar || null]
         );
 
@@ -81,18 +82,19 @@ const login = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
         }
 
-        // Generar tokens
-        const accessToken = generateAccessToken(user);
+        // Generar tokens preliminares (el refreshToken no depende del sessionId)
         const refreshToken = generateRefreshToken(user);
 
         // Guardar Refresh Token en la base de datos para rotación y seguridad
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 1); // 1 hora coincidiendo con JWT
-        
-        await pool.query(
-            'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-            [user.id, refreshToken, expiresAt]
+        // Usamos CURRENT_TIMESTAMP del motor de DB para total consistencia con created_at
+        // y evitar problemas de desincronización entre Node.js y Postgres
+        const resultToken = await pool.query(
+            'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL \'1 hour\') RETURNING id',
+            [user.id, refreshToken]
         );
+        
+        const sessionId = resultToken.rows[0].id;
+        const accessToken = generateAccessToken(user, sessionId);
 
         // Guardar Refresh Token en una cookie HTTP-only
         res.cookie('refreshToken', refreshToken, {
@@ -109,7 +111,8 @@ const login = async (req, res) => {
                 id: user.id,
                 name: user.name,
                 email: user.email,
-                avatar: user.avatar
+                avatar: user.avatar,
+                role: user.role
             }
         });
     } catch (error) {
@@ -159,7 +162,7 @@ const refresh = async (req, res) => {
             }
 
             // 3. Buscar usuario
-            const result = await pool.query('SELECT id, name, email, avatar FROM users WHERE id = $1', [decoded.id]);
+            const result = await pool.query('SELECT id, name, email, avatar, role FROM users WHERE id = $1', [decoded.id]);
             if (result.rows.length === 0) {
                 return res.status(403).json({ success: false, message: 'Usuario no encontrado' });
             }
@@ -169,15 +172,15 @@ const refresh = async (req, res) => {
             // 4. ROTACIÓN: Borrar token viejo y crear uno nuevo
             await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [oldRefreshToken]);
             
-            const newAccessToken = generateAccessToken(user);
             const newRefreshToken = generateRefreshToken(user);
 
-            const expiresAt = new Date();
-            expiresAt.setHours(expiresAt.getHours() + 1);
-            await pool.query(
-                'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-                [user.id, newRefreshToken, expiresAt]
+            const resultToken = await pool.query(
+                'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL \'1 hour\') RETURNING id',
+                [user.id, newRefreshToken]
             );
+
+            const sessionId = resultToken.rows[0].id;
+            const newAccessToken = generateAccessToken(user, sessionId);
 
             // 5. Actualizar cookie
             res.cookie('refreshToken', newRefreshToken, {
@@ -222,7 +225,7 @@ const logout = async (req, res) => {
 const getMe = async (req, res) => {
     try {
         // req.user viene del middleware de autenticación
-        const result = await pool.query('SELECT id, name, email, avatar, created_at FROM users WHERE id = $1', [req.user.id]);
+        const result = await pool.query('SELECT id, name, email, avatar, role, created_at FROM users WHERE id = $1', [req.user.id]);
         
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
