@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import taskService from '../services/taskService';
+import subtaskService from '../services/subtaskService';
 
 /**
  * Hook personalizado para gestionar el estado de las tareas y las operaciones CRUD.
@@ -80,7 +81,16 @@ export const useTasks = () => {
   const createTask = useCallback(async (taskData) => {
     setLoading(true);
     try {
-      await taskService.createTask(taskData);
+      // Separamos las subtareas del resto de datos de la tarea
+      const { subtasks, ...taskFields } = taskData;
+
+      const createdTask = await taskService.createTask(taskFields);
+
+      // Si hay subtareas, las creamos en bulk justo después
+      if (subtasks && subtasks.length > 0) {
+        await subtaskService.bulkCreateSubtasks(createdTask.id, subtasks);
+      }
+
       await fetchTasks();
       await fetchStats();
       return true;

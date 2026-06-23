@@ -6,7 +6,7 @@ import TaskFilters from '../components/tasks/TaskFilters';
 import TaskSearchById from '../components/tasks/TaskSearchById';
 import TaskForm from '../components/tasks/TaskForm';
 import TaskList from '../components/tasks/TaskList';
-import TaskEditForm from '../components/tasks/TaskEditForm';
+import TaskDetailModal from '../components/tasks/TaskDetailModal';
 import ErrorMessage from '../components/common/ErrorMessage';
 import ConfirmModal from '../components/common/ConfirmModal';
 import { useTasks } from '../hooks/useTasks';
@@ -25,25 +25,25 @@ const HomePage = () => {
     handleFilterChange
   } = useTasks();
 
-  const [editingTask, setEditingTask] = useState(null);
+  const [detailTask, setDetailTask] = useState(null);
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [lastSearchedId, setLastSearchedId] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(null);
 
-  const handleEditClick = useCallback((task) => {
-    setEditingTask(task);
+  
+
+  const handleDetailsClick = useCallback((task) => {
+    setDetailTask(task);
   }, []);
 
-  const handleUpdate = useCallback(async (id, data) => {
+  const handleDetailSave = useCallback(async (id, data) => {
     const success = await updateTask(id, data);
     if (success) {
-      setEditingTask(null);
-      // Si la tarea editada es la que se buscó por ID, activamos una recarga
-      // para que TaskSearchById sepa que debe volver a buscarla
-      if (lastSearchedId && lastSearchedId.toString().split('_')[0] === id.toString()) {
-        setLastSearchedId(id + '_' + Date.now()); 
-      }
+      // Disparamos el trigger para que TaskSearchById recargue si tiene esa tarea
+      setRefreshTrigger(id + '_' + Date.now());
     }
-  }, [updateTask, lastSearchedId]);
+    return success;
+  }, [updateTask]);
 
   const handleDeleteClick = useCallback((id) => {
     setTaskToDelete(id);
@@ -52,9 +52,7 @@ const HomePage = () => {
   const confirmDelete = useCallback(async () => {
     if (taskToDelete) {
       const success = await deleteTask(taskToDelete);
-      if (success) {
-        setTaskToDelete(null);
-      }
+      if (success) setTaskToDelete(null);
     }
   }, [deleteTask, taskToDelete]);
 
@@ -64,9 +62,9 @@ const HomePage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Panel Lateral Izquierdo: Estado y Creación */}
-        <div className="w-full lg:w-1/3 flex flex-col gap-8">
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        {/* Panel izquierdo: sticky, no se estira */}
+        <div className="w-full lg:w-1/3 flex flex-col gap-8 lg:sticky lg:top-8">
           <SectionCard title="Terminal de Estado">
             <ApiStatus />
             <TaskStats stats={stats} />
@@ -77,21 +75,20 @@ const HomePage = () => {
           </SectionCard>
         </div>
 
-        {/* Panel Central: Filtros, Búsqueda y Lista */}
+        {/* Panel derecho: crece libremente */}
         <div className="w-full lg:w-2/3 flex flex-col gap-6">
           <SectionCard title="Panel de Control">
-            <TaskSearchById 
-              onSearch={findTaskById} 
-              onEdit={handleEditClick} 
+            <TaskSearchById
+              onSearch={findTaskById}
+              onDetails={handleDetailsClick}
               onDelete={handleDeleteClick}
-              refreshTrigger={lastSearchedId}
+              refreshTrigger={refreshTrigger}
               onSearchedIdChange={setLastSearchedId}
             />
-            
             <div className="border-t border-slate-800 pt-6 mt-2">
-              <TaskFilters 
-                filters={filters} 
-                onFilterChange={handleFilterChange} 
+              <TaskFilters
+                filters={filters}
+                onFilterChange={handleFilterChange}
               />
             </div>
           </SectionCard>
@@ -99,27 +96,26 @@ const HomePage = () => {
           {error && <ErrorMessage message={error} />}
 
           <SectionCard title="Base de Datos de Tareas">
-            <TaskList 
-              tasks={tasks} 
-              loading={loading} 
-              onEdit={handleEditClick} 
-              onDelete={handleDeleteClick} 
+            <TaskList
+              tasks={tasks}
+              loading={loading}
+              onDetails={handleDetailsClick}
+              onDelete={handleDeleteClick}
             />
           </SectionCard>
         </div>
       </div>
 
-      {/* Modales */}
-      {editingTask && (
-        <TaskEditForm 
-          task={editingTask}
-          onSubmit={handleUpdate}
-          onCancel={() => setEditingTask(null)}
+      {detailTask && (
+        <TaskDetailModal
+          task={detailTask}
+          onSave={handleDetailSave}
+          onClose={() => setDetailTask(null)}
           loading={loading}
         />
       )}
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={!!taskToDelete}
         title="¿Confirmas la eliminación definitiva de este registro?"
         message="Esta acción purgará los datos de forma permanente en el sistema."

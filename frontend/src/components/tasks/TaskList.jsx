@@ -1,7 +1,7 @@
 import TaskCard from './TaskCard';
 import Loading from '../common/Loading';
 
-const TaskList = ({ tasks = [], loading, onEdit, onDelete }) => {
+const TaskList = ({ tasks = [], loading, onDetails, onDelete }) => {
   if (loading && (!tasks || tasks.length === 0)) return <Loading />;
 
   if (!Array.isArray(tasks) || tasks.length === 0) {
@@ -17,11 +17,11 @@ const TaskList = ({ tasks = [], loading, onEdit, onDelete }) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
       {tasks.map((task) => (
-        <TaskCard 
-          key={task.id} 
-          task={task} 
-          onEdit={onEdit} 
-          onDelete={onDelete} 
+        <TaskCard
+          key={task.id}
+          task={task}
+          onDetails={onDetails}
+          onDelete={onDelete}
         />
       ))}
     </div>

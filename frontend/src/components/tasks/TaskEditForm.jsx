@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Button from '../ui/Button';
+import CategoryCheckboxList from './CategoryCheckboxList';
 
 const TaskEditForm = ({ task, onSubmit, onCancel, loading }) => {
   const [formData, setFormData] = useState({
@@ -9,7 +10,8 @@ const TaskEditForm = ({ task, onSubmit, onCancel, loading }) => {
     description: '',
     priority: 'medium',
     status: 'pending',
-    due_date: ''
+    due_date: '',
+    category_ids: []
   });
 
   useEffect(() => {
@@ -20,7 +22,8 @@ const TaskEditForm = ({ task, onSubmit, onCancel, loading }) => {
         description: task.description || '',
         priority: task.priority || 'medium',
         status: task.status || 'pending',
-        due_date: task.due_date ? task.due_date.split('T')[0] : ''
+        due_date: task.due_date ? task.due_date.split('T')[0] : '',
+        category_ids: (task.categories || []).map(c => c.id)
       });
     }
   }, [task]);
@@ -28,6 +31,10 @@ const TaskEditForm = ({ task, onSubmit, onCancel, loading }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCategoriesChange = (ids) => {
+    setFormData(prev => ({ ...prev, category_ids: ids }));
   };
 
   const handleSubmit = (e) => {
@@ -93,6 +100,11 @@ const TaskEditForm = ({ task, onSubmit, onCancel, loading }) => {
               options={statusOptions}
             />
           </div>
+
+          <CategoryCheckboxList
+            value={formData.category_ids}
+            onChange={handleCategoriesChange}
+          />
 
           <div className="flex gap-3 pt-4">
             <Button 

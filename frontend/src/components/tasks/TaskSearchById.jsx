@@ -3,15 +3,12 @@ import Input from '../ui/Input';
 import Button from '../ui/Button';
 import TaskCard from './TaskCard';
 
-const TaskSearchById = ({ onSearch, onEdit, onDelete, refreshTrigger, onSearchedIdChange }) => {
-  const [searchId, setSearchId] = useState('');
-  const [foundTask, setFoundTask] = useState(null);
+const TaskSearchById = ({ onSearch, onDetails, onDelete, refreshTrigger, onSearchedIdChange }) => {
+  const [searchId, setSearchId]     = useState('');
+  const [foundTask, setFoundTask]   = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
 
-  /**
-   * Ejecuta la búsqueda de la tarea en la API.
-   */
   const executeSearch = useCallback(async (id) => {
     if (!id) return;
     setIsSearching(true);
@@ -38,20 +35,24 @@ const TaskSearchById = ({ onSearch, onEdit, onDelete, refreshTrigger, onSearched
     executeSearch(searchId);
   };
 
-  /**
-   * Efecto para reaccionar a cambios externos (como una edición exitosa)
-   * que requieren refrescar la tarea buscada actualmente.
-   */
+  // ── Limpiar búsqueda ──
+  const handleClear = () => {
+    setSearchId('');
+    setFoundTask(null);
+    setSearchError(null);
+    if (onSearchedIdChange) onSearchedIdChange(null);
+  };
+
+  // ── Refrescar la tarea mostrada cuando se cierra el modal de detalle ──
+  // refreshTrigger cambia cada vez que updateTask se llama con éxito en el padre
   useEffect(() => {
-    // Solo disparamos el refresco si el trigger contiene el separador '_'
-    // lo cual indica que es una acción de refresco explícita desde el padre.
-    if (refreshTrigger && refreshTrigger.toString().includes('_') && foundTask) {
-      const idToRefresh = refreshTrigger.toString().split('_')[0];
-      if (idToRefresh === foundTask.id.toString()) {
-        executeSearch(idToRefresh);
+    if (refreshTrigger && foundTask) {
+      const triggerId = refreshTrigger.toString().split('_')[0];
+      if (triggerId === foundTask.id.toString()) {
+        executeSearch(triggerId);
       }
     }
-  }, [refreshTrigger, foundTask, executeSearch]);
+  }, [refreshTrigger]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="mb-8">
@@ -65,9 +66,16 @@ const TaskSearchById = ({ onSearch, onEdit, onDelete, refreshTrigger, onSearched
           type="number"
           className="flex-1"
         />
-        <Button type="submit" disabled={isSearching || !searchId} className="w-full sm:w-auto">
-          {isSearching ? 'Buscando...' : 'Buscar'}
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button type="submit" disabled={isSearching || !searchId} className="flex-1 sm:flex-none">
+            {isSearching ? 'Buscando...' : 'Buscar'}
+          </Button>
+          {(foundTask || searchError || searchId) && (
+            <Button type="button" onClick={handleClear} className="flex-1 sm:flex-none">
+              Limpiar
+            </Button>
+          )}
+        </div>
       </form>
 
       {searchError && (
@@ -79,13 +87,14 @@ const TaskSearchById = ({ onSearch, onEdit, onDelete, refreshTrigger, onSearched
           <div className="text-[10px] font-bold text-[var(--accent-secondary)] uppercase px-3 py-1">
             Resultado de búsqueda:
           </div>
-          <TaskCard 
-            task={foundTask} 
-            onEdit={onEdit} 
+          <TaskCard
+            task={foundTask}
+            onDetails={onDetails}
             onDelete={() => {
               onDelete(foundTask.id);
               setFoundTask(null);
-            }} 
+              setSearchId('');
+            }}
           />
         </div>
       )}

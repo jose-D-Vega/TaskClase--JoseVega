@@ -10,6 +10,8 @@ const { connectDB, pool } = require('./config/db');
 const taskRoutes = require('./routes/taskRoutes');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const subtaskRoutes = require('./routes/subtaskRoutes');
 
 const errorHandler = require('./middleware/errorHandler');
 
@@ -67,8 +69,11 @@ app.get('/api/health', async (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+// Las subtareas están anidadas bajo tareas: /api/tasks/:taskId/subtasks
+app.use('/api/tasks/:taskId/subtasks', subtaskRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/categories', categoryRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

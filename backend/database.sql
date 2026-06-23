@@ -64,3 +64,33 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
+
+-- Tabla de Categorías
+CREATE TABLE IF NOT EXISTS categories (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    color VARCHAR(20) DEFAULT '#00f0ff',
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Evitar categorías duplicadas por usuario
+CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_user_name ON categories(user_id, name);
+
+-- Tabla intermedia: relación muchos a muchos entre tareas y categorías
+CREATE TABLE IF NOT EXISTS task_categories (
+    task_id     INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+    PRIMARY KEY (task_id, category_id)
+);
+
+-- Tabla de Sub-tareas
+CREATE TABLE IF NOT EXISTS subtasks (
+    id          SERIAL PRIMARY KEY,
+    task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    title       VARCHAR(255) NOT NULL,
+    completed   BOOLEAN DEFAULT FALSE,
+    created_at  TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);

@@ -1,13 +1,43 @@
 // Importamos el pool de conexiones a la base de datos
 const { pool } = require('../config/db');
 
+/**
+ * Valida que los IDs de categorías pertenezcan al usuario y sincroniza
+ * la tabla intermedia task_categories para una tarea dada.
+ */
+const syncTaskCategories = async (taskId, categoryIds, userId) => {
+  // Normalizamos: quitamos vacíos/duplicados
+  const ids = [...new Set((categoryIds || []).filter(id => id !== null && id !== ''))];
+
+  if (ids.length > 0) {
+    const valid = await pool.query(
+      `SELECT id FROM categories WHERE user_id = $1 AND id = ANY($2::int[])`,
+      [userId, ids]
+    );
+    if (valid.rows.length !== ids.length) {
+      throw { status: 400, message: 'Una o más categorías especificadas no existen o no tienes permiso' };
+    }
+  }
+
+  // Reemplazamos las relaciones existentes
+  await pool.query('DELETE FROM task_categories WHERE task_id = $1', [taskId]);
+
+  if (ids.length > 0) {
+    const values = ids.map((_, i) => `($1, $${i + 2})`).join(', ');
+    await pool.query(
+      `INSERT INTO task_categories (task_id, category_id) VALUES ${values}`,
+      [taskId, ...ids]
+    );
+  }
+};
+
 // ─────────────────────────────────────────────────────────────
 // GET /api/tasks — Obtener TODAS las tareas
 // ─────────────────────────────────────────────────────────────
 const getAllTasks = async (req, res) => {
   try {
     const { status, priority } = req.query;
-    const user_id = req.user.id; // Obtenemos el ID del usuario autenticado
+    const user_id = req.user.id;
     
     let query  = `
       SELECT 
@@ -19,8 +49,16 @@ const getAllTasks = async (req, res) => {
         t.due_date,
         t.user_id,
         t.created_at,
-        t.updated_at
+        t.updated_at,
+        COALESCE(
+          json_agg(
+            json_build_object('id', c.id, 'name', c.name, 'color', c.color)
+          ) FILTER (WHERE c.id IS NOT NULL),
+          '[]'
+        ) AS categories
       FROM tasks t
+      LEFT JOIN task_categories tc ON tc.task_id = t.id
+      LEFT JOIN categories c ON c.id = tc.category_id
       WHERE t.user_id = $1
     `;
     
@@ -38,6 +76,8 @@ const getAllTasks = async (req, res) => {
       params.push(priority);
       idx++;
     }
+
+    query += ` GROUP BY t.id`;
     
     query += ` ORDER BY 
       CASE t.priority 
@@ -70,7 +110,19 @@ const getTaskById = async (req, res) => {
     const user_id = req.user.id;
     
     const result = await pool.query(
-      `SELECT * FROM tasks WHERE id = $1 AND user_id = $2`,
+      `SELECT 
+        t.*,
+        COALESCE(
+          json_agg(
+            json_build_object('id', c.id, 'name', c.name, 'color', c.color)
+          ) FILTER (WHERE c.id IS NOT NULL),
+          '[]'
+        ) AS categories
+      FROM tasks t
+      LEFT JOIN task_categories tc ON tc.task_id = t.id
+      LEFT JOIN categories c ON c.id = tc.category_id
+      WHERE t.id = $1 AND t.user_id = $2
+      GROUP BY t.id`,
       [id, user_id]
     );
     
@@ -94,7 +146,7 @@ const getTaskById = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 const createTask = async (req, res) => {
   try {
-    const { title, description, status, priority, due_date } = req.body;
+    const { title, description, status, priority, due_date, category_ids } = req.body;
     const user_id = req.user.id;
     
     if (!title || title.trim() === '') {
@@ -117,11 +169,39 @@ const createTask = async (req, res) => {
         user_id
       ]
     );
+
+    const newTask = result.rows[0];
+
+    try {
+      await syncTaskCategories(newTask.id, category_ids, user_id);
+    } catch (catError) {
+      // Revertimos la tarea creada si las categorías no son válidas
+      await pool.query('DELETE FROM tasks WHERE id = $1', [newTask.id]);
+      return res.status(catError.status || 500).json({ success: false, message: catError.message });
+    }
+
+    // Recuperamos la tarea con sus categorías ya asociadas
+    const finalTask = await pool.query(
+      `SELECT 
+        t.*,
+        COALESCE(
+          json_agg(
+            json_build_object('id', c.id, 'name', c.name, 'color', c.color)
+          ) FILTER (WHERE c.id IS NOT NULL),
+          '[]'
+        ) AS categories
+      FROM tasks t
+      LEFT JOIN task_categories tc ON tc.task_id = t.id
+      LEFT JOIN categories c ON c.id = tc.category_id
+      WHERE t.id = $1
+      GROUP BY t.id`,
+      [newTask.id]
+    );
     
     res.status(201).json({
       success: true,
       message: 'Tarea creada exitosamente',
-      data: result.rows[0]
+      data: finalTask.rows[0]
     });
     
   } catch (error) {
@@ -136,7 +216,7 @@ const createTask = async (req, res) => {
 const updateTask = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, status, priority, due_date } = req.body;
+    const { title, description, status, priority, due_date, category_ids } = req.body;
     const user_id = req.user.id;
     
     if (title !== undefined && title.trim() === '') {
@@ -146,7 +226,6 @@ const updateTask = async (req, res) => {
       });
     }
     
-    // Verificamos que la tarea existe y pertenece al usuario
     const taskExists = await pool.query('SELECT id FROM tasks WHERE id = $1 AND user_id = $2', [id, user_id]);
     if (taskExists.rows.length === 0) {
       return res.status(404).json({
@@ -155,7 +234,7 @@ const updateTask = async (req, res) => {
       });
     }
     
-    const result = await pool.query(
+    await pool.query(
       `UPDATE tasks SET
         title       = COALESCE($1, title),
         description = COALESCE($2, description),
@@ -163,8 +242,7 @@ const updateTask = async (req, res) => {
         priority    = COALESCE($4::task_priority, priority),
         due_date    = COALESCE($5, due_date),
         updated_at  = CURRENT_TIMESTAMP
-       WHERE id = $6 AND user_id = $7
-       RETURNING *`,
+       WHERE id = $6 AND user_id = $7`,
       [
         title !== undefined ? title : null,
         description !== undefined ? description : null,
@@ -175,11 +253,37 @@ const updateTask = async (req, res) => {
         user_id
       ]
     );
+
+    // Solo sincronizamos categorías si category_ids viene en el body
+    if (category_ids !== undefined) {
+      try {
+        await syncTaskCategories(id, category_ids, user_id);
+      } catch (catError) {
+        return res.status(catError.status || 500).json({ success: false, message: catError.message });
+      }
+    }
+
+    const finalTask = await pool.query(
+      `SELECT 
+        t.*,
+        COALESCE(
+          json_agg(
+            json_build_object('id', c.id, 'name', c.name, 'color', c.color)
+          ) FILTER (WHERE c.id IS NOT NULL),
+          '[]'
+        ) AS categories
+      FROM tasks t
+      LEFT JOIN task_categories tc ON tc.task_id = t.id
+      LEFT JOIN categories c ON c.id = tc.category_id
+      WHERE t.id = $1
+      GROUP BY t.id`,
+      [id]
+    );
     
     res.json({
       success: true,
       message: 'Tarea actualizada exitosamente',
-      data: result.rows[0]
+      data: finalTask.rows[0]
     });
     
   } catch (error) {

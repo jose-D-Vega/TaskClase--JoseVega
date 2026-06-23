@@ -25,6 +25,9 @@ const Header = () => {
               <Link to="/" className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)] hover:text-cyber-cyan transition-colors">
                 Tareas
               </Link>
+              <Link to="/categories" className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)] hover:text-cyber-cyan transition-colors">
+                Categorías
+              </Link>
               {user.role === 'admin' && (
                 <Link to="/admin" className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)] hover:text-cyber-cyan transition-colors">
                   Admin

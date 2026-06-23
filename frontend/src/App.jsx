@@ -10,6 +10,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import RoleGuard from './components/auth/RoleGuard';
 import PublicRoute from './components/auth/PublicRoute';
 import Header from './components/layout/Header';
+import CategoriesPage from './pages/CategoriesPage';
 
 function AppContent() {
   return (
@@ -27,6 +28,7 @@ function AppContent() {
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/categories" element={<CategoriesPage />} />
           </Route>
 
           {/* Rutas de Administrador */}
