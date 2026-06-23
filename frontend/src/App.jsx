@@ -11,6 +11,8 @@ import RoleGuard from './components/auth/RoleGuard';
 import PublicRoute from './components/auth/PublicRoute';
 import Header from './components/layout/Header';
 import CategoriesPage from './pages/CategoriesPage';
+import ProjectsPage from './pages/ProjectsPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
 
 function AppContent() {
   return (
@@ -29,6 +31,8 @@ function AppContent() {
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/projects"           element={<ProjectsPage />} />
+            <Route path="/projects/:id"       element={<ProjectDetailPage />} />
           </Route>
 
           {/* Rutas de Administrador */}

@@ -12,6 +12,7 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const subtaskRoutes = require('./routes/subtaskRoutes');
+const projectRoutes = require('./routes/projectRoutes');
 
 const errorHandler = require('./middleware/errorHandler');
 
@@ -74,6 +75,7 @@ app.use('/api/tasks/:taskId/subtasks', subtaskRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/projects', projectRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

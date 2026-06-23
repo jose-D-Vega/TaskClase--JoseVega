@@ -146,19 +146,27 @@ const getTaskById = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 const createTask = async (req, res) => {
   try {
-    const { title, description, status, priority, due_date, category_ids } = req.body;
+    const { title, description, status, priority, due_date, category_ids, project_id } = req.body;
     const user_id = req.user.id;
-    
+
     if (!title || title.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        message: 'El título de la tarea es obligatorio'
-      });
+      return res.status(400).json({ success: false, message: 'El título de la tarea es obligatorio' });
     }
-    
+
+    // Verificar que el proyecto pertenece al usuario si se especifica
+    if (project_id) {
+      const projectCheck = await pool.query(
+        'SELECT id FROM projects WHERE id = $1 AND user_id = $2',
+        [project_id, user_id]
+      );
+      if (projectCheck.rows.length === 0) {
+        return res.status(400).json({ success: false, message: 'El proyecto especificado no existe o no tienes permiso' });
+      }
+    }
+
     const result = await pool.query(
-      `INSERT INTO tasks (title, description, status, priority, due_date, user_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO tasks (title, description, status, priority, due_date, project_id, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         title.trim(),
@@ -166,6 +174,7 @@ const createTask = async (req, res) => {
         status   || 'pending',
         priority || 'medium',
         due_date || null,
+        project_id || null,
         user_id
       ]
     );
@@ -175,35 +184,23 @@ const createTask = async (req, res) => {
     try {
       await syncTaskCategories(newTask.id, category_ids, user_id);
     } catch (catError) {
-      // Revertimos la tarea creada si las categorías no son válidas
       await pool.query('DELETE FROM tasks WHERE id = $1', [newTask.id]);
       return res.status(catError.status || 500).json({ success: false, message: catError.message });
     }
 
-    // Recuperamos la tarea con sus categorías ya asociadas
     const finalTask = await pool.query(
-      `SELECT 
-        t.*,
-        COALESCE(
-          json_agg(
-            json_build_object('id', c.id, 'name', c.name, 'color', c.color)
-          ) FILTER (WHERE c.id IS NOT NULL),
-          '[]'
-        ) AS categories
-      FROM tasks t
-      LEFT JOIN task_categories tc ON tc.task_id = t.id
-      LEFT JOIN categories c ON c.id = tc.category_id
-      WHERE t.id = $1
-      GROUP BY t.id`,
+      `SELECT t.*,
+        COALESCE(json_agg(json_build_object('id', c.id, 'name', c.name, 'color', c.color))
+          FILTER (WHERE c.id IS NOT NULL), '[]') AS categories
+       FROM tasks t
+       LEFT JOIN task_categories tc ON tc.task_id = t.id
+       LEFT JOIN categories c ON c.id = tc.category_id
+       WHERE t.id = $1 GROUP BY t.id`,
       [newTask.id]
     );
-    
-    res.status(201).json({
-      success: true,
-      message: 'Tarea creada exitosamente',
-      data: finalTask.rows[0]
-    });
-    
+
+    res.status(201).json({ success: true, message: 'Tarea creada exitosamente', data: finalTask.rows[0] });
+
   } catch (error) {
     console.error('Error en createTask:', error);
     res.status(500).json({ success: false, message: 'Error al crear la tarea' });
@@ -216,24 +213,32 @@ const createTask = async (req, res) => {
 const updateTask = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, status, priority, due_date, category_ids } = req.body;
+    const { title, description, status, priority, due_date, category_ids, project_id } = req.body;
     const user_id = req.user.id;
-    
+
     if (title !== undefined && title.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        message: 'El título de la tarea no puede estar vacío'
-      });
+      return res.status(400).json({ success: false, message: 'El título no puede estar vacío' });
     }
-    
+
     const taskExists = await pool.query('SELECT id FROM tasks WHERE id = $1 AND user_id = $2', [id, user_id]);
     if (taskExists.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: `No se encontró la tarea o no tienes permiso`
-      });
+      return res.status(404).json({ success: false, message: 'Tarea no encontrada o sin permiso' });
     }
-    
+
+    // Verificar proyecto si se especifica uno
+    if (project_id) {
+      const projectCheck = await pool.query(
+        'SELECT id FROM projects WHERE id = $1 AND user_id = $2',
+        [project_id, user_id]
+      );
+      if (projectCheck.rows.length === 0) {
+        return res.status(400).json({ success: false, message: 'El proyecto especificado no existe o no tienes permiso' });
+      }
+    }
+
+    const projectProvided = project_id !== undefined;
+    const projectValue = (project_id === '' || project_id === null) ? null : project_id;
+
     await pool.query(
       `UPDATE tasks SET
         title       = COALESCE($1, title),
@@ -241,20 +246,22 @@ const updateTask = async (req, res) => {
         status      = COALESCE($3::task_status, status),
         priority    = COALESCE($4::task_priority, priority),
         due_date    = COALESCE($5, due_date),
+        project_id  = CASE WHEN $6 THEN $7 ELSE project_id END,
         updated_at  = CURRENT_TIMESTAMP
-       WHERE id = $6 AND user_id = $7`,
+       WHERE id = $8 AND user_id = $9`,
       [
         title !== undefined ? title : null,
         description !== undefined ? description : null,
         (status && status.trim() !== '') ? status : null,
         (priority && priority.trim() !== '') ? priority : null,
         (due_date && due_date.trim() !== '') ? due_date : null,
+        projectProvided,
+        projectValue,
         id,
         user_id
       ]
     );
 
-    // Solo sincronizamos categorías si category_ids viene en el body
     if (category_ids !== undefined) {
       try {
         await syncTaskCategories(id, category_ids, user_id);
@@ -264,28 +271,18 @@ const updateTask = async (req, res) => {
     }
 
     const finalTask = await pool.query(
-      `SELECT 
-        t.*,
-        COALESCE(
-          json_agg(
-            json_build_object('id', c.id, 'name', c.name, 'color', c.color)
-          ) FILTER (WHERE c.id IS NOT NULL),
-          '[]'
-        ) AS categories
-      FROM tasks t
-      LEFT JOIN task_categories tc ON tc.task_id = t.id
-      LEFT JOIN categories c ON c.id = tc.category_id
-      WHERE t.id = $1
-      GROUP BY t.id`,
+      `SELECT t.*,
+        COALESCE(json_agg(json_build_object('id', c.id, 'name', c.name, 'color', c.color))
+          FILTER (WHERE c.id IS NOT NULL), '[]') AS categories
+       FROM tasks t
+       LEFT JOIN task_categories tc ON tc.task_id = t.id
+       LEFT JOIN categories c ON c.id = tc.category_id
+       WHERE t.id = $1 GROUP BY t.id`,
       [id]
     );
-    
-    res.json({
-      success: true,
-      message: 'Tarea actualizada exitosamente',
-      data: finalTask.rows[0]
-    });
-    
+
+    res.json({ success: true, message: 'Tarea actualizada exitosamente', data: finalTask.rows[0] });
+
   } catch (error) {
     console.error('Error en updateTask:', error);
     res.status(500).json({ success: false, message: 'Error al actualizar la tarea' });

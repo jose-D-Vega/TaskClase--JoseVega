@@ -94,3 +94,19 @@ CREATE TABLE IF NOT EXISTS subtasks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);
+
+-- Tabla de Proyectos
+CREATE TABLE IF NOT EXISTS projects (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(150) NOT NULL,
+    description TEXT,
+    color       VARCHAR(20) DEFAULT '#00f0ff',
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_user_name ON projects(user_id, name);
+
+-- Relación: cada tarea puede pertenecer a un proyecto (opcional)
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
